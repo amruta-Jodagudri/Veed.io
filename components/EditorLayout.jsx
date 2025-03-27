@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Text, Group, Button, TextInput, ActionIcon } from "@mantine/core"
-import { IconSearch, IconArrowLeft, IconArrowRight } from "@tabler/icons-react"
+import { IconSearch } from "@tabler/icons-react"
 import Sidebar from "./Sidebar"
 import ContentPanel from "./ContentPanel"
 import Canvas from "./Canvas"
@@ -15,6 +15,8 @@ export default function EditorLayout({ mode, initialMedia }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(60)
+  const [projectName, setProjectName] = useState("Project Name")
+  const [isEditingProjectName, setIsEditingProjectName] = useState(false)
   const videoRefs = useRef({})
   const animationRef = useRef(null)
 
@@ -140,6 +142,23 @@ export default function EditorLayout({ mode, initialMedia }) {
     if (isPlaying) setIsPlaying(false)
   }
 
+  const handleDownload = () => {
+    // Find the main video element to download
+    const mainVideo = mediaElements.find(media => media.type === "video");
+    
+    if (mainVideo) {
+      const videoSrc = mainVideo.src;
+      const link = document.createElement('a');
+      link.href = videoSrc;
+      link.download = `${projectName}.${videoSrc.split('.').pop().split('?')[0]}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      alert("No video found to download");
+    }
+  }
+
   return (
     <div className="editor-container">
       <Sidebar activeTab={activeTab} onChangeTab={setActiveTab} />
@@ -155,13 +174,24 @@ export default function EditorLayout({ mode, initialMedia }) {
       <div className="canvas-container">
         <div className="canvas-header">
           <Group>
-            <Text>Project Name</Text>
-            <ActionIcon variant="subtle">
+            {isEditingProjectName ? (
+              <TextInput
+                placeholder="Project Name"
+                onChange={(e) => setProjectName(e.target.value)}
+                onBlur={() => setIsEditingProjectName(false)}
+                autoFocus
+              />
+            ) : (
+              <Text onClick={() => setIsEditingProjectName(true)} style={{ cursor: 'pointer' }}>
+                {projectName}
+              </Text>
+            )}
+            {/* <ActionIcon variant="subtle">
               <IconArrowLeft size={18} />
             </ActionIcon>
             <ActionIcon variant="subtle">
               <IconArrowRight size={18} />
-            </ActionIcon>
+            </ActionIcon> */}
           </Group>
 
           <Group>
@@ -175,7 +205,7 @@ export default function EditorLayout({ mode, initialMedia }) {
               log in
             </Button>
             <Button color="orange">Upgrade</Button>
-            <Button color="indigo">Done</Button>
+            <Button color="indigo" onClick={handleDownload}>Download</Button>
           </Group>
         </div>
 
