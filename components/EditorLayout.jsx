@@ -143,7 +143,6 @@ export default function EditorLayout({ mode, initialMedia }) {
   }
 
   const handleDownload = () => {
-    // Find the main video element to download
     const mainVideo = mediaElements.find(media => media.type === "video");
     
     if (mainVideo) {

@@ -11,16 +11,41 @@ function MediaElement({
   onUpdate,
   currentTime,
   isPlaying,
-  registerVideoRef
+  registerVideoRef,
+  canvasSize
 }) {
   const videoRef = useRef(null)
+  const [fullSizePosition, setFullSizePosition] = useState({ x: 0, y: 0 })
+  const [fullSizeDimensions, setFullSizeDimensions] = useState({ width: canvasSize.width, height: canvasSize.height })
+  
+  const calculateNormalizedValues = () => {
+    const scaleX = fullSizeDimensions.width / canvasSize.width
+    const scaleY = fullSizeDimensions.height / canvasSize.height
+    const offsetX = fullSizePosition.x / canvasSize.width
+    const offsetY = fullSizePosition.y / canvasSize.height
+    
+    return {
+      x: media.x + (offsetX * media.width),
+      y: media.y + (offsetY * media.height),
+      width: media.width * scaleX,
+      height: media.height * scaleY
+    }
+  }
+
   const bindDrag = useDrag(({ movement: [dx, dy], first, last }) => {
     if (first) onSelect(media.id)
     if (!last) {
-      onUpdate(media.id, {
-        x: media.x + dx,
-        y: media.y + dy,
-      })
+      if (isSelected) {
+        setFullSizePosition(prev => ({
+          x: prev.x + dx,
+          y: prev.y + dy
+        }))
+      } else {
+        onUpdate(media.id, {
+          x: media.x + dx,
+          y: media.y + dy,
+        })
+      }
     }
   })
 
@@ -41,24 +66,60 @@ function MediaElement({
   const handleResize = (corner, dx, dy, first, last) => {
     if (first) onSelect(media.id)
     if (!last) {
-      let updates = {}
-      switch (corner) {
-        case "top-left":
-          updates = { x: media.x + dx, y: media.y + dy, width: media.width - dx, height: media.height - dy }
-          break
-        case "top-right":
-          updates = { y: media.y + dy, width: media.width + dx, height: media.height - dy }
-          break
-        case "bottom-left":
-          updates = { x: media.x + dx, width: media.width - dx, height: media.height + dy }
-          break
-        case "bottom-right":
-          updates = { width: media.width + dx, height: media.height + dy }
-          break
+      if (isSelected) {
+        let newWidth = fullSizeDimensions.width
+        let newHeight = fullSizeDimensions.height
+        let newX = fullSizePosition.x
+        let newY = fullSizePosition.y
+
+        switch (corner) {
+          case "top-left":
+            newX += dx
+            newY += dy
+            newWidth -= dx
+            newHeight -= dy
+            break
+          case "top-right":
+            newY += dy
+            newWidth += dx
+            newHeight -= dy
+            break
+          case "bottom-left":
+            newX += dx
+            newWidth -= dx
+            newHeight += dy
+            break
+          case "bottom-right":
+            newWidth += dx
+            newHeight += dy
+            break
+        }
+
+        if (newWidth < 50) newWidth = 50
+        if (newHeight < 50) newHeight = 50
+
+        setFullSizeDimensions({ width: newWidth, height: newHeight })
+        setFullSizePosition({ x: newX, y: newY })
+      } else {
+        let updates = {}
+        switch (corner) {
+          case "top-left":
+            updates = { x: media.x + dx, y: media.y + dy, width: media.width - dx, height: media.height - dy }
+            break
+          case "top-right":
+            updates = { y: media.y + dy, width: media.width + dx, height: media.height - dy }
+            break
+          case "bottom-left":
+            updates = { x: media.x + dx, width: media.width - dx, height: media.height + dy }
+            break
+          case "bottom-right":
+            updates = { width: media.width + dx, height: media.height + dy }
+            break
+        }
+        if (updates.width < 50) updates.width = 50
+        if (updates.height < 50) updates.height = 50
+        onUpdate(media.id, updates)
       }
-      if (updates.width < 50) updates.width = 50
-      if (updates.height < 50) updates.height = 50
-      onUpdate(media.id, updates)
     }
   }
 
@@ -78,16 +139,33 @@ function MediaElement({
     handleResize("bottom-right", dx, dy, first, last)
   });
 
+  useEffect(() => {
+    if (!isSelected) {
+      const normalized = calculateNormalizedValues()
+      onUpdate(media.id, {
+        x: normalized.x,
+        y: normalized.y,
+        width: normalized.width,
+        height: normalized.height
+      })
+      setFullSizePosition({ x: 0, y: 0 })
+      setFullSizeDimensions({ width: canvasSize.width, height: canvasSize.height })
+    }
+  }, [isSelected])
+
   return (
     <div
       className={`media-element ${isSelected ? "selected" : ""}`}
       style={{
         position: 'absolute',
-        left: media.x,
-        top: media.y,
-        width: media.width,
-        height: media.height,
+        left: isSelected ? fullSizePosition.x : media.x,
+        top: isSelected ? fullSizePosition.y : media.y,
+        width: isSelected ? fullSizeDimensions.width : media.width,
+        height: isSelected ? fullSizeDimensions.height : media.height,
         border: isSelected ? '2px dashed #4c6ef5' : 'none',
+        zIndex: isSelected ? 2 : 1,
+        transform: isSelected ? 'scale(1)' : 'none',
+        transformOrigin: 'top left'
       }}
       onClick={() => onSelect(media.id)}
       {...bindDrag()}
@@ -96,7 +174,11 @@ function MediaElement({
         <video 
           ref={videoRef}
           src={media.src} 
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          style={{ 
+            width: "100%", 
+            height: "100%", 
+            objectFit: "cover" 
+          }}
           controls={isSelected}
           muted
         />
@@ -105,7 +187,11 @@ function MediaElement({
       {media.type === "image" && (
         <img
           src={media.src || "/placeholder.svg"}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          style={{ 
+            width: "100%", 
+            height: "100%", 
+            objectFit: isSelected ? "contain" : "cover" 
+          }}
           alt={media.name || "Media"}
         />
       )}
@@ -123,6 +209,22 @@ function MediaElement({
           <div className="resize-handle" style={{ top: -5, right: -5 }} {...bindResizeTopRight()} />
           <div className="resize-handle" style={{ bottom: -5, left: -5 }} {...bindResizeBottomLeft()} />
           <div className="resize-handle" style={{ bottom: -5, right: -5 }} {...bindResizeBottomRight()} />
+          
+          <div style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            color: 'white',
+            padding: '4px 8px',
+            borderRadius: 4,
+            cursor: 'pointer',
+            zIndex: 3
+          }} onClick={(e) => {
+            e.stopPropagation()
+            onSelect(null)
+          }}>
+          </div>
         </>
       )}
     </div>
@@ -206,8 +308,6 @@ export default function Canvas({
     media => currentTime >= media.startTime && currentTime <= media.endTime
   )
 
-  const hasSelectedMedia = selectedMedia !== null
-
   return (
     <div 
       className="canvas-area" 
@@ -241,10 +341,11 @@ export default function Canvas({
             currentTime={currentTime}
             isPlaying={isPlaying}
             registerVideoRef={registerVideoRef}
+            canvasSize={canvasSize}
           />
         ))}
 
-        {hasSelectedMedia && (
+        {selectedMedia && (
           <div style={{
             position: 'absolute',
             bottom: '16px',
